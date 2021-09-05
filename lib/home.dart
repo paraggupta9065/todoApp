@@ -1,6 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 class MyHomePage extends StatefulWidget {
   @override
@@ -10,23 +10,30 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   TextEditingController todo = TextEditingController();
 
+  Box todoBox = Hive.box('todo');
+  List todos = [];
+  initHives() async {
+    await Hive.openBox('todo');
+    setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
-    initFire();
+    initHives();
   }
 
-  initFire() async {
-    await Firebase.initializeApp().whenComplete(() {
-      setState(() {});
-    });
+  List getListData() {
+    Hive.initFlutter();
+    Hive.openBox("todo");
+    return todoBox.values.toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    CollectionReference firebaseInstance =
-        FirebaseFirestore.instance.collection("todo");
     FocusNode focusNode = FocusNode();
+    todos = getListData();
+
     return Scaffold(
       backgroundColor: Color.fromRGBO(230, 230, 230, 1.0),
       body: SafeArea(
@@ -84,10 +91,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     backgroundColor: Colors.black,
                     onPressed: () {
                       setState(() {
-                        firebaseInstance.add({
-                          "todo": todo.text,
-                        });
-                        focusNode.unfocus();
+                        todoBox.add({"name": todo.text});
                       });
                     },
                     child: Icon(Icons.add),
@@ -99,23 +103,10 @@ class _MyHomePageState extends State<MyHomePage> {
               height: 20,
             ),
             Expanded(
-              child: FutureBuilder(
-                future: getData(),
-                builder: (BuildContext context,
-                    AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>>
-                        asyncSnapshot) {
-                  if (!asyncSnapshot.hasData) {
-                    return Center(
-                      child: CircularProgressIndicator(),
-                    );
-                  }
-                  QuerySnapshot<Map<String, dynamic>>? data =
-                      asyncSnapshot.data;
-                  return ListView.builder(
-                    itemCount: data!.size,
-                    itemBuilder: (context, index) =>
-                        todoTile(asyncSnapshot.data!.docs[index]),
-                  );
+              child: ListView.builder(
+                itemCount: todos.length,
+                itemBuilder: (BuildContext context, int index) {
+                  return todoTile(index);
                 },
               ),
             )
@@ -125,15 +116,13 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  Widget todoTile(
-    QueryDocumentSnapshot? snapshort,
-  ) {
+  Widget todoTile(int index) {
     bool isEdit = false;
     FocusNode focusNode = FocusNode();
+    Box todoBox = Hive.box('todo');
+
     TextEditingController todoEdit =
-        TextEditingController(text: snapshort!.get("todo"));
-    CollectionReference firebaseInstance =
-        FirebaseFirestore.instance.collection("todo");
+        TextEditingController(text: todoBox.values.toList()[index]['name']);
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 20),
       child: SizedBox(
@@ -165,11 +154,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           readOnly: isEdit,
                           focusNode: focusNode,
                           controller: todoEdit,
-                          onChanged: (value) {
-                            firebaseInstance.doc(snapshort.id).update(
-                              {"todo": todoEdit.text},
-                            );
-                          },
+                          onChanged: (value) {},
                           decoration: InputDecoration(
                             border: InputBorder.none,
                           ),
@@ -189,7 +174,7 @@ class _MyHomePageState extends State<MyHomePage> {
               IconButton(
                 onPressed: () {
                   setState(() {
-                    snapshort.reference.delete();
+                    todoBox.deleteAt(index);
                   });
                 },
                 icon: Icon(
@@ -201,10 +186,5 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
       ),
     );
-  }
-
-  Future<QuerySnapshot<Map<String, dynamic>>> getData() async {
-    await Firebase.initializeApp();
-    return FirebaseFirestore.instance.collection("todo").get();
   }
 }
